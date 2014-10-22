@@ -1,0 +1,209 @@
+Barbell Lift Prediction
+========================================================
+
+**Authored by: patenak**  
+Class: Practical Machine Learning - predmachlearn-006  
+Date: October 2014  
+John Hopkins University / Coursera  
+
+
+Abstract
+========
+
+In the last two years, a large number of human activity trackers have been commercially 
+available to the general public. The most popular of these devices include the Fitbit One, Nike+ 
+FuelBand, Jawbone UP24, and Garmin Vivofit. Depending on the type of tracker, they
+have the ability to record a number of data variables such as; steps taken, distance 
+covered, stairs climbed, even quality and duration of the user's sleep.  
+
+Recently, there has been a effort to evaluate this data for use in human activity
+recognition (HAR). By using HAR, devices may be able to identify and distinguish various 
+types of exercise in real time.  In addition, a group of researchers recently collected and
+evaluated data to evaluate the correct and four different incorrect executions of a weight lifting exercise[1].
+The purpose of the project is evaluate this HAR data and build a prediction model
+to predict the method of execution of the exercise from a set of test data.
+
+
+Data Read and Cleanup:
+==============
+
+The training data for this assignment are available here:  
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The testing data are available here:  
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv  
+
+The training and test data was downloaded and loaded into R to evaluate what kind of data existed for the experiment.
+
+```{r, Read Data}
+training <- read.csv("pml-training.csv")
+test <- read.csv("pml-testing.csv")
+```
+
+The training set has `r nrow(training)` observations and `r ncol(training)` variables.
+The test contains `r nrow(test)` observations and the same number of variables.
+
+The first thing noticed about the data sets, is that a large amount of the variables contain 
+no data or "NA" as a value. After further investigation, when a row with the column "new_window" is designated as "yes", it contains values for all the variables.  Checking the test data
+set reveals no existence of these special "yes" rows within the `r nrow(test)` observations.
+
+````{r, Test Table for Window}
+table(test$new_window)
+```
+
+Therefore, the rows with no data have no impact on the prediction model since the
+data does not exist in the test set. All rows containing no data or "NA" were 
+identified and removed from the training set.
+
+```{r, Null/NA Removal}
+training[is.na(training)] <- ""
+remcols <- as.numeric(training[1,] =="")
+remcols <- which(remcols %in% 1)
+training <- training[,-remcols]
+```
+
+The fields labeled "X","raw_timestamp_part_1","raw_timestamp_part_2","cvtd_timestamp",
+"new_window","num_window" appear to be "housekeeping" variables, so they will also 
+be removed.
+
+```{r, more cleaning}
+training <- training[,-c(1,3:7)]
+````
+
+This drastically minimizes the training data set and leaves `r ncol(training)` 
+relevant variables for building the prediction models.
+
+Prediction Models
+=================
+
+All libraries required to build and evaluate predictive models were loaded into R.
+
+```{r, Load Libraries, results="hide"}
+library(caret); library(ggplot2); library(randomForest)
+```
+
+The original training data set was broken into another training set containing 75% of the data 
+and the remaining 25% was used as a testing set. The resulting training set was used to 
+generate a predictive model to predict values for the resulting test set. The predictions
+were compared to the actual test values to calculate the error rate.  Three models
+were built and evaluated to cross validate the model parameters. The error rate for 
+the three models will be averaged to approximate the out of sample error.  The
+models were built using Random Forest Method (method="rf") and included all variables
+compared to performed activity (classe variable).
+
+**NOTE: All three models (and final model) were built previously using the exact 
+following seeds and saved via the save() function. Each model was loaded back into R 
+using the load() function to prevent long wait times for model creation while generating 
+this report.**
+
+**The statements for the model generation have been commented (#) so they 
+will not run, but have been included for completeness.**
+
+```{r, First Model}
+#CrossValdiation #1
+set.seed(642294)
+intrain1 <- createDataPartition(y=training$classe, p=0.75, list=FALSE)
+train1 <- training[intrain1,]; test1 <- training[-intrain1,]
+
+#modelfit1 <- train(classe ~ ., data = train1, method = "rf")
+
+load("modelfit1.rda")
+modelfit1
+```
+
+The prediction accuracy and error (1 - accuracy) was calculated
+
+```{r, Prediction/Error 1}
+pred1 <- predict(modelfit1, test1)
+acc1 <- table(pred1,test1$classe)/length(pred1); acc1
+err1 <- 1-sum(diag(acc1)); err1
+```
+
+Total Accuracy: `r sum(diag(acc1))`  
+Error Rate: `r err1`
+
+This process was repeated another two times using seed 7496 and seed 948752 to 
+generate models 2 and 3 respectively.
+
+```{r, Models 2 and 3,echo=FALSE,results='hide'}
+#CrossValidation #2:
+set.seed(7496)
+intrain2 <- createDataPartition(y=training$classe, p=0.75, list=FALSE)
+train2 <- training[intrain2,]
+test2 <- training[-intrain2,]
+
+#modelfit2 <- train(classe ~ ., data = train2, method = "rf")
+load("modelfit2.rda")
+modelfit2
+
+pred2 <- predict(modelfit2, test2)
+acc2 <- table(pred2,test2$classe)/length(pred2); acc2
+err2 <- 1-sum(diag(acc2)); err2
+
+#CrossValidation #3:
+set.seed(948752)
+intrain3 <- createDataPartition(y=training$classe, p=0.75, list=FALSE)
+train3 <- training[intrain3,]
+test3 <- training[-intrain3,]
+
+#modelfit3 <- train(classe ~ ., data = train3, method = "rf")
+load("modelfit3.rda")
+modelfit3
+
+pred3 <- predict(modelfit3, test3)
+acc3 <- table(pred3,test3$classe)/length(pred3); acc3
+err3 <- 1-sum(diag(acc3)); err3
+```
+These models had the following Accuracy/Error Rates:
+
+Total Accuracy, Model 2: `r sum(diag(acc2))`  
+Error Rate, Model 2: `r err2`  
+
+Total Accuracy, Model 2: `r sum(diag(acc3))`  
+Error Rate, Model 2: `r err3`  
+
+The Out of Sample Error is estimated to be the average of Error Rate of the three models.
+
+```{r, OOS Error Rate}
+oose <- (err1 + err2 + err3)/3
+ooser <- oose * 100
+```
+
+The Out of Sample Error Rate is `r ooser`%. 
+
+Final Model and Predictions
+===========================
+
+The final model used the training data set containing `r nrow(training)` observations
+and `r ncol(training)` variables that was created during data cleanup. It will include
+all variables and be performed by Random Forest, exactly like the three cross validation
+models.
+
+```{r, Final Model}
+
+#modelfitall <- train(classe ~ ., data = training, method = "rf")
+load("modelfitall.rda")
+modelfitall
+```
+
+Then the model was used to make predictions on the downloaded test data set.
+
+```{r, Predictions}
+pred <- predict(modelfitall, test)
+pred
+```
+
+All predictions will be submitted for the course project submission portion of
+the class project. 
+
+References
+==========
+
+[1] Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H.
+**Qualitative Activity Recognition of Weight Lifting Exercises.**
+*Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human '13)*, 
+Stuttgart, Germany: ACM SIGCHI, 2013.
+
+**NOTE:**  Paper can be found at:  
+http://groupware.les.inf.puc-rio.br/public/papers/2013.Velloso.QAR-WLE.pdf  
+
